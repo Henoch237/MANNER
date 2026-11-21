@@ -1,0 +1,36 @@
+# state.yaml
+# Tracks what the executor BELIEVES is true.
+# Gripper state is NOT sensed — the executor just issues commands when needed.
+
+version: "1.0"
+
+robot:
+  # Semantic location label. The executor updates this after every motion.
+  # Values: "initial_pose", "unknown", "at_object", "at_destination", etc.
+  location: "initial_pose"
+
+  # Last known TCP pose [X, Y, Z, Rx, Ry, Rz].
+  # Updated from GetActualTCPPose() after every move for safety checks.
+  last_known_pose: [102.26055145263672, -383.2015075683594, 493.603759765625,
+                    179.2078399658203, 4.763824462890625, 91.51363372802734]
+
+  # GRIPPER: NOT tracked reliably because no sensor.
+  # The executor NEVER trusts this field. Instead:
+  # - Before "pick": always call gripper_open() (even if already open)
+  # - Before "place": always call gripper_open() (to be safe)
+  # - Before "stir": always call gripper_close() (to hold the stick)
+  gripper: "unknown"
+
+  # What the robot believes it is holding.
+  # Set by executor after successful pick, cleared after place.
+  # NOT verified by sensor.
+  holding: null
+
+  # Believed record of the last commanded motion profile (rule 18 output).
+  # Placeholder for future faster/slower adjustment factors, which will
+  # multiply these values.
+  last_speed: 30
+  last_accel: 100
+
+  # Current or last-executed task ID for logging.
+  current_task: "idle"

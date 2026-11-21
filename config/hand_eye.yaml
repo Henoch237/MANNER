@@ -1,0 +1,16 @@
+# hand_eye.yaml
+# Eye-in-hand calibration: pose of the RealSense colour camera in the robot
+# FLANGE frame (tool 0), i.e. p_flange = T_flange_cam @ p_cam.
+# Translation in MILLIMETRES, rotation as a 3x3 matrix.
+#
+# Written by:  python -m dmp_assistant.tools.calibrate_hand_eye
+# The previous file is kept as hand_eye.yaml.bak on every rewrite.
+version: "1.0"
+source: "imported from grasping-v6/calibration.py (T_gc, metres -> mm); not yet re-run with calibrate_hand_eye"
+method: "unknown"
+n_samples: 0
+T_flange_cam:
+  - [ 0.01629,  0.95060,  0.30999, -96.14]
+  - [-0.99983,  0.01268,  0.01364,  28.99]
+  - [ 0.00903, -0.31015,  0.95064,  52.59]
+  - [ 0.0,      0.0,      0.0,       1.0 ]

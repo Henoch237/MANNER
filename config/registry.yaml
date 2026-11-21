@@ -1,0 +1,342 @@
+# registry.yaml
+# This is the "menu" the LLM reads to know what the robot can do.
+# The Executor reads the same file to know which Python code to run.
+
+version: "1.0"
+
+primitives:
+  # ============================================================
+  # ATOMIC PRIMITIVES (lowest level — the robot API wrappers)
+  # ============================================================
+
+  - id: "linear_move"
+    description: "Move the robot TCP in a straight line (MoveL) to a target cartesian pose."
+    type: "atomic"
+    parameters:
+      - name: "target_pose"
+        type: "pose_reference"
+        description: "Semantic ID of the target pose, e.g. 'red_block.approach' or 'coffee_cup.center'"
+      - name: "speed"
+        type: "integer"
+        default: 30
+        description: "Motion speed percentage (1-100)."
+    preconditions: []
+    postconditions:
+      - "robot.tcp_pose is now at target_pose"
+    implementation:
+      file: "dmp_assistant/skills/motion.py"
+      function: "movel"
+      notes: "Executor resolves target_pose via scene.yaml before calling."
+
+  - id: "joint_move"
+    description: "Move the robot via joint angles (MoveJ) to a target configuration."
+    type: "atomic"
+    parameters:
+      - name: "target_joints"
+        type: "joint_reference"
+        description: "Semantic ID of target joint configuration."
+      - name: "speed"
+        type: "integer"
+        default: 30
+    preconditions: []
+    postconditions:
+      - "robot.joints match target_joints"
+    implementation:
+      file: "dmp_assistant/skills/motion.py"
+      function: "movej"
+
+  - id: "gripper"
+    description: "Control the gripper: open or close."
+    type: "atomic"
+    parameters:
+      - name: "state"
+        type: "enum"
+        options: ["open", "close"]
+        description: "'open' releases object. 'close' grasps."
+    preconditions: []
+    postconditions:
+      - "robot.gripper == state"
+    implementation:
+      file: "dmp_assistant/skills/gripper.py"
+      function: "gripper_open / gripper_close"
+      notes: "Executor routes 'open' to gripper_open(), 'close' to gripper_close()."
+
+  - id: "approach_z"
+    description: "Move straight down or up along Z-axis by a relative distance in mm."
+    type: "atomic"
+    parameters:
+      - name: "offset_mm"
+        type: "float"
+        default: -35.0
+        description: "Negative = descend, Positive = ascend."
+      - name: "speed"
+        type: "integer"
+        default: 30
+    preconditions:
+      - "robot is already at a known pose (to compute offset from)"
+    postconditions:
+      - "robot.tcp_pose.z shifted by offset_mm"
+    implementation:
+      file: "dmp_assistant/skills/motion.py"
+      function: "relative_z_move"
+
+  # ============================================================
+  # COMPOSITE PRIMITIVES (macros — built from atomics)
+  # ============================================================
+
+  - id: "pick"
+    description: "Pick an object located by the camera (YOLO). Looks from the scan pose, moves above the object, descends, closes gripper, retracts."
+    type: "composite"
+    parameters:
+      - name: "object_id"
+        type: "detected_object_reference"
+        description: "Camera-detected object to pick, e.g. 'bottle'. Only objects with a YOLO class can be picked."
+      - name: "recipient"
+        type: "string"
+        default: null
+        description: "Who the action is for: a name from people.yaml or a register ('slower profile'/'faster profile'). Set THIS - the planner fills speed/accel from the register. Never emit speed/accel yourself."
+      - name: "speed"
+        type: "integer"
+        default: 30
+        description: "TCP speed percent (1-100). PLANNER-FILLED from the recipient's register (people.yaml, rule 18) - the LLM must not set it."
+      - name: "accel"
+        type: "integer"
+        default: 100
+        description: "Acceleration percent (1-100). PLANNER-FILLED from the recipient's register - the LLM must not set it."
+      - name: "gripper_force"
+        type: "integer"
+        default: 100
+        description: "Gripper closing force percent (20-100). PLANNER-FILLED from the object's handling_class (scene.yaml) and the intent's manner - the LLM must not set it."
+    preconditions:
+      - "robot.gripper == open"
+    postconditions:
+      - "robot.holding == object_id"
+      - "robot.gripper == close"
+    steps:
+      - action: "linear_move"
+        target_pose: "{object_id}.approach_pose"
+      - action: "approach_z"
+        offset_mm: -35.0
+      - action: "gripper"
+        state: "close"
+      - action: "approach_z"
+        offset_mm: 35.0
+    implementation:
+      file: "dmp_assistant/execution/executor.py"
+      function: "Executor._pick"
+      notes: "Executor._pick_detected: scan pose -> YOLO-OBB + depth ->
+        hand-eye -> hover -> grasp (settings in perception.yaml). Objects
+        without a scene.yaml `detect` class cannot be picked."
+
+  - id: "place"
+    description: "Place held object at destination. Moves to approach, descends, opens gripper, retracts."
+    type: "composite"
+    parameters:
+      - name: "location_id"
+        type: "object_reference"
+        description: "Semantic ID of destination, e.g. 'bin'."
+      - name: "recipient"
+        type: "string"
+        default: null
+        description: "Who the action is for: a name from people.yaml or a register ('slower profile'/'faster profile'). Set THIS - the planner fills speed/accel from the register. Never emit speed/accel yourself."
+      - name: "speed"
+        type: "integer"
+        default: 30
+        description: "TCP speed percent (1-100). PLANNER-FILLED from the recipient's register (people.yaml, rule 18) - the LLM must not set it."
+      - name: "accel"
+        type: "integer"
+        default: 100
+        description: "Acceleration percent (1-100). PLANNER-FILLED from the recipient's register - the LLM must not set it."
+    preconditions:
+      - "robot.gripper == close"
+      - "robot.holding is not null"
+    postconditions:
+      - "robot.gripper == open"
+      - "robot.holding == null"
+    steps:
+      - action: "linear_move"
+        target_pose: "{location_id}.approach_pose"
+      - action: "approach_z"
+        offset_mm: -35.0
+      - action: "gripper"
+        state: "open"
+      - action: "approach_z"
+        offset_mm: 35.0
+
+  - id: "pick_and_place"
+    description: "Full pick-and-place cycle: pick a camera-detected object then place at destination."
+    type: "composite"
+    parameters:
+      - name: "object_id"
+        type: "detected_object_reference"
+      - name: "destination_id"
+        type: "object_reference"
+      - name: "recipient"
+        type: "string"
+        default: null
+        description: "Who the action is for: a name from people.yaml or a register ('slower profile'/'faster profile'). Set THIS - the planner fills speed/accel from the register. Never emit speed/accel yourself."
+      - name: "speed"
+        type: "integer"
+        default: 30
+        description: "TCP speed percent (1-100). PLANNER-FILLED from the recipient's register (people.yaml, rule 18) - the LLM must not set it."
+      - name: "accel"
+        type: "integer"
+        default: 100
+        description: "Acceleration percent (1-100). PLANNER-FILLED from the recipient's register - the LLM must not set it."
+      - name: "gripper_force"
+        type: "integer"
+        default: 100
+        description: "Gripper closing force percent (20-100). PLANNER-FILLED from the object's handling_class (scene.yaml) and the intent's manner - the LLM must not set it."
+    preconditions:
+      - "robot.gripper == open"
+    postconditions:
+      - "robot.gripper == open"
+      - "object_id is at destination_id"
+    steps:
+      - action: "pick"
+        object_id: "{object_id}"
+      - action: "place"
+        location_id: "{destination_id}"
+
+  - id: "stir"
+    description: "Stir a cup using rhythmic DMP. Assumes stirring stick is already held."
+    type: "composite"
+    parameters:
+      - name: "cup_id"
+        type: "object_reference"
+        description: "Semantic ID of cup, e.g. 'coffee_cup'."
+      - name: "omega_scale"
+        type: "float"
+        default: 1.0
+        description: "Speed multiplier. 0.5 = gentle, 1.5 = fast. Recipient register mapping (rule 20): slower profile/gently -> 0.7, faster profile -> 1.0."
+      - name: "revolutions"
+        type: "integer"
+        default: 2
+        bounds: [1, 6]
+        description: "How many full circles to stir. Resolver-resolved: an emitted value is the user's stated count or thoroughness wish (clamped to bounds); when omitted, manner 'well' -> 4, otherwise the default 2."
+      - name: "speed"
+        type: "integer"
+        default: 30
+        description: "Transit-to-cup speed percent only. PLANNER-FILLED from the recipient's register. The stirring tempo is omega_scale, not this."
+      - name: "accel"
+        type: "integer"
+        default: 100
+        description: "Transit-to-cup acceleration percent only. PLANNER-FILLED from the recipient's register."
+    preconditions:
+      - "robot.gripper == close"
+      - "robot.holding is not null (stick is attached)"
+    postconditions:
+      - "robot.tcp_pose is at cup center"
+    steps:
+      - action: "linear_move"
+        target_pose: "{cup_id}.center_pose"
+      - action: "dmp_stir"
+        center_pose: "{cup_id}.center_pose"
+        omega_scale: "{omega_scale}"
+        revolutions: "{revolutions}"
+    implementation:
+      file: "dmp_assistant/execution/executor.py"  # Executor._stir + skills/dmp.py
+      function: "Executor._stir"
+      notes: "Executor passes resolved center_pose directly to DMP function."
+
+  - id: "pour"
+    description: "Pour by tilting the held container in place, using the learned pouring DMP. Happens FROM the current pose (position pinned) - use go_to first if the robot needs repositioning. Tempo adapts to the recipient: omega_scale time-scales the learned DMP cycle (1.0 = recorded demo, 0.7 = slow/gentle)."
+    type: "composite"
+    parameters:
+      - name: "omega_scale"
+        type: "float"
+        default: 1.0
+        description: "Pour tempo factor (DMP time-scaling). PLANNER-FILLED from the recipient's register (people.yaml): slower profile/gently -> 0.7, faster profile -> 1.0. The LLM must not set it."
+    preconditions: []
+    postconditions:
+      - "robot.tcp_pose is back at the pose the pour started from"
+    steps:
+      - action: "dmp_pour"
+        notes: "In-place tilt from current pose. omega_scale (tempo) is planner-filled from the recipient register; tilt/dwell/revs remain fixed to the recorded demo for now."
+    implementation:
+      file: "dmp_assistant/skills/pour.py"
+      function: "pour"
+      notes: "Executor calls pour(robot, confirm=False). pour() returns to the start pose after the tilt; executor must wait for the queue to fully drain before the next action.
+        Start-configuration guard: joints 4-6 must be within 25 deg of the recorded wrist (REF_WRIST); otherwise the wrist is realigned by MoveJ (J1-3 unchanged), and if that fails the pour is a joint-6 rotation (-100 deg, hold, back) instead of the DMP."
+
+  - id: "hand_over"
+    description: "Hand the currently held object to a human. The robot sits back
+      to an observation pose (wrist camera up), presents the object with wrist
+      orientation frozen (no slip, camera stays up), holds still for a
+      confirmation dwell after a verified stop, opens the gripper, and retreats
+      to the observation pose. Poses come from scene.yaml; only speed/dwell
+      scalars are planner-facing."
+    type: "composite"
+    parameters:
+      - name: "confirm_dwell_s"
+        type: "float"
+        default: 3.0
+        description: "Seconds held still (after a verified full stop) before release. PLANNER-FILLED from the recipient's register: slower profile -> 4.0, faster profile -> 3.0. The LLM must not set it."
+    preconditions:
+      - "robot.holding is not null"
+    postconditions:
+      - "robot.gripper == open"
+      - "robot.holding == null"
+    steps:
+      - action: "linear_move"   # to handover.observation_pose
+      - action: "hold"          # observation pause (posture-analysis hook)
+      - action: "linear_move"   # to handover.present_pose, orientation frozen by guardrail
+      - action: "hold"          # confirmation dwell (starts after settle verification)
+      - action: "gripper"       # state: open (instant; queue drained before this)
+      - action: "linear_move"   # retreat to observation_pose
+    implementation:
+      file: "dmp_assistant/skills/hand_over.py"
+      function: "hand_over"
+      notes: "Executor calls hand_over(robot, approach_scale, confirm_dwell_s).
+        Orientation guardrail and pose-settle verification are internal to the skill."
+
+  - id: "go_to"
+    description: "Move the robot TCP to a target pose without any gripper action. Use this for 'go to', 'move to', or 'return to' commands."
+    type: "composite"
+    parameters:
+      - name: "target_pose"
+        type: "pose_reference"
+        description: "Semantic ID of destination pose, e.g. 'initial_pose.value' or 'red_block.approach_pose'."
+      - name: "recipient"
+        type: "string"
+        default: null
+        description: "Who the action is for: a name from people.yaml or a register ('slower profile'/'faster profile'). Set THIS - the planner fills speed/accel from the register. Never emit speed/accel yourself."
+      - name: "speed"
+        type: "integer"
+        default: 30
+        description: "TCP speed percent (1-100). PLANNER-FILLED from the recipient's register (people.yaml, rule 18) - the LLM must not set it."
+      - name: "accel"
+        type: "integer"
+        default: 100
+        description: "Acceleration percent (1-100). PLANNER-FILLED from the recipient's register - the LLM must not set it."
+    preconditions: [ ]
+    postconditions:
+      - "robot.tcp_pose is at target_pose"
+    steps:
+      - action: "linear_move"
+        target_pose: "{target_pose}"
+
+  - id: "gripper_open"
+    description: "Open the robot gripper to release a held object."
+    type: "composite"
+    parameters: [ ]
+    preconditions: [ ]
+    postconditions:
+      - "robot.gripper == open"
+    steps:
+      - action: "gripper"
+        state: "open"
+
+  - id: "gripper_close"
+    description: "Close the robot gripper to grasp an object."
+    type: "composite"
+    parameters: [ ]
+    preconditions: [ ]
+    postconditions:
+      - "robot.gripper == close"
+    steps:
+      - action: "gripper"
+        state: "close"
+
+
+

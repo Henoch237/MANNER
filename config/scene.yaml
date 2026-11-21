@@ -1,0 +1,68 @@
+# scene.yaml
+version: "1.0"
+poses:
+  initial_pose:
+    value: [102.26055145263672, -383.2015075683594, 493.603759765625,
+            179.2078399658203, 4.763824462890625, 91.51363372802734]
+    description: "Safe observation / transit pose."
+
+  red_block:
+    handling_class: "standard"   # robust | standard | fragile | deformable
+    grasp_pose:
+      value: [-21.24605369567871, -538.5603637695312, 221.66738891601562,
+              176.8939971923828, 7.890963077545166, 87.8626937866211]
+      description: "Actual contact pose for the red block / cup center."
+    approach_pose:
+      derived_from: "red_block.grasp_pose"
+      offset_z_mm: 35.0
+      description: "Computed at resolve time: 35 mm above grasp_pose
+        (world-Z) for collision-free approach. No stored value needed."
+
+  bin:
+    place_pose:
+      value: [437.2504577636719, -292.58258056640625, 226.45614624023438, 174.2410125732422, 2.4009909629821777, 152.72645568847656]
+      description: "Drop-off location."
+    approach_pose:
+      derived_from: "bin.place_pose"
+      offset_z_mm: 40.0
+      description: "Computed: 40 mm above place_pose. Rule 2 target for
+        'bin position' / 'near the bin' — never navigate to place_pose itself."
+
+  coffee_cup:
+    handling_class: "fragile"   # ceramic cup -> gripper_force 80
+    center_pose:
+      ref: "red_block.grasp_pose"
+      description: "Cup center for stirring. Same coordinates as red_block grasp."
+    approach_pose:
+      ref: "red_block.approach_pose"
+      description: "Approach above cup. Same coordinates as red_block approach."
+
+  handover:
+    observation_pose:
+      value: [67.4984130859375, -317.10003662109375, 573.67333984375,
+              -161.801025390625, 86.3539047241211, 108.64924621582031]
+      description: "Sitting-back pose; wrist camera up; robot views user posture."
+    present_pose:
+      value: [12.622769355773926, -646.3342895507812, 524.7904052734375,
+              -161.80299377441406, 86.35376739501953, 108.6473159790039]
+      description: "Object offering point. Only POSITION is used at runtime -
+        orientation is frozen to observation_pose by the hand_over guardrail."
+
+  # ------------------------------------------------------------------
+  # Camera-detected objects: NO stored pose. `detect` is the YOLO class
+  # (model/best.pt); the executor finds the object from
+  # perception.yaml's scan_pose at pick time (see perception/locator.py).
+  # They can be picked, never used as go_to targets.
+  # ------------------------------------------------------------------
+  bottle:
+    detect: "bottle"
+    description: "Bottle, located by the camera."
+  cylinder:
+    detect: "cylinder"
+    description: "Cylinder, located by the camera."
+  hollow:
+    detect: "hollow"
+    description: "Hollow object (open container), located by the camera."
+  sanitizer:
+    detect: "sanitizer"
+    description: "Hand sanitizer bottle, located by the camera."

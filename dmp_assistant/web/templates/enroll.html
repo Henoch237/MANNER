@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Face enrollment · ROBOT{% endblock %}
+{% block main_class %}center{% endblock %}
+{% block content %}
+<section class="card auth-card" data-token="{{ token }}">
+  <h1>Face enrollment</h1>
+  <p class="muted">Choose the person, then capture about 5 photos: facing the camera,
+    slightly turned, with and without glasses. One person in the frame only.</p>
+
+  <label class="field">Person
+    <select id="name">
+      {% for n in roster %}<option value="{{ n }}">{{ n|capitalize }}</option>{% endfor %}
+    </select>
+  </label>
+
+  <div class="camera" id="camera">
+    <video id="video" autoplay playsinline muted></video>
+  </div>
+
+  <button class="btn btn-primary" id="capture">Capture photo</button>
+  <p class="auth-status" id="status" role="status" aria-live="polite">Starting the camera…</p>
+</section>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='camera.js') }}"></script>
+<script src="{{ url_for('static', filename='enroll.js') }}"></script>
+{% endblock %}

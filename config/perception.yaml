@@ -1,0 +1,73 @@
+# perception.yaml
+# Camera-based pick: YOLOv8-OBB (model/best.pt) + RealSense depth +
+# hand-eye calibration (hand_eye.yaml). Static - edited by humans.
+#
+# Frames: every pose is the FLANGE pose (tool 0), [x, y, z, rx, ry, rz] in
+# mm / deg, like scene.yaml. The fingertip sits gripper_length_mm below the
+# flange along the tool Z axis.
+version: "1.0"
+
+camera:
+  width: 640
+  height: 480
+  fps: 30
+  warmup_frames: 15          # auto-exposure settles before the first detection
+
+detector:
+  conf: 0.5                  # minimum YOLO confidence
+  imgsz: 640                 # training size (read from best.pt)
+  max_box_fraction: 0.8      # reject a box spanning most of the frame
+
+locate:
+  scan_pose: "initial_pose.value"   # scene.yaml ref the robot looks from
+  frames: 5                  # frames analysed per localisation
+  min_hits: 3                # frames that must see the object
+  depth_range_mm: [150, 1200]
+  depth_percentile: 10       # nearest 10% of depths in the box = object top
+  box_shrink: 0.6            # sample depth in the central 60% of the box
+  min_aspect_for_yaw: 1.3    # long/short below this = round: keep scan yaw
+  max_spread_mm: 15.0        # frames disagreeing more than this -> fail
+  # Constant correction added to every located point (base frame, mm), for
+  # a residual hand-eye bias - same role as grasping-v6 xy_corr. Measure it
+  # as (true - camera) at 2-3 table positions and keep it only if it is
+  # consistent. 2026-10-02, one point: camera (99,-572,53), true (91,-567,59).
+  # 2026-10-06: XY part applied - the lying bottle was gripped ~1 cm off
+  # centre and slipped on lift. Z left at 0 (grasp height tuned by depth_mm).
+  offset_mm: [-8.0, 5.0, 0.0]
+
+grasp:
+  gripper_length_mm: 220.0   # flange -> fingertip (same as grasping-v6)
+  hover_mm: 60.0             # fingertip height above the object top before descending
+  # Table measured at z ~ -21 mm (2026-10-02: fingertip on an 80 mm object
+  # read z = 59). -5.5 keeps the fingertip >= ~15 mm above the table.
+  table_z_mm: -5.5           # fingertip never goes below this (base frame)
+  default_depth_mm: 47.5     # fingertip goes this far below the object top
+  # Jaw closing axis in the tool frame. With "y", tool X is aligned with the
+  # object's long axis and the jaws close across it (grasping-v6 convention).
+  jaw_axis: "y"
+  # Off: the grasp pose is computed ONCE from the scan pose and the arm
+  # descends without re-measuring - close to the object the camera sees
+  # only part of it, so a hover re-detection can be wrong (2026-10-02).
+  refine_at_hover: false     # re-detect from hover height and correct XY
+  max_correction_mm: 40.0    # larger hover correction = bad reading -> fail
+  # Off: on this robot GetGripperCurPosition() reads 0 even with the bottle
+  # held (2026-10-02), so the check released good grasps. Turn on only once
+  # the reported position is checked to be > empty_gripper_pos when holding.
+  verify_grasp: false        # gripper fully closed on air -> pick fails
+  empty_gripper_pos: 3       # MoveGripper position <= this after closing = empty
+
+# Workspace guard on the computed FLANGE poses (base frame, mm).
+workspace:
+  x: [-450, 450]
+  y: [-800, -200]
+  z: [150, 650]
+
+# Per-class overrides, keyed by YOLO class name (model/best.pt names:
+# bottle, cylinder, hollow, sanitizer).
+classes:
+  # 2026-10-02: +5 mm after the first real bottle grasp was too high.
+  # 2026-10-06: +2.5 mm more, for a firmer grip.
+  bottle:    { depth_mm: 47.5 }
+  cylinder:  { depth_mm: 47.5 }
+  hollow:    { depth_mm: 32.5 }   # grip the rim: shallow
+  sanitizer: { depth_mm: 47.5 }

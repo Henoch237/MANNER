@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}{{ user|capitalize }} · ROBOT{% endblock %}
+{% block body_class %}app{% endblock %}
+{% block main_class %}workspace{% endblock %}
+{% block user %}
+  <button class="btn btn-ghost logs-toggle" id="logs-toggle" aria-controls="log-panel" aria-expanded="false">Logs</button>
+  <div class="user">
+    <span class="avatar" aria-hidden="true">{{ user[:1]|upper }}</span>
+    <span class="user-name">{{ user|capitalize }}</span>
+  </div>
+  <button class="btn btn-ghost" id="logout">Sign out</button>
+{% endblock %}
+{% block content %}
+<section class="chat-panel" aria-label="Conversation">
+  <div class="transcript" id="transcript" aria-live="polite">
+    <div class="welcome" id="welcome">
+      <h1>Hello {{ user|capitalize }}</h1>
+      <p class="muted">Tell the robot what to do, in your own words. Every plan is shown to you
+        before anything moves.</p>
+      <div class="suggestions">
+        <button class="suggestion" data-text="Stir the coffee gently">Stir the coffee gently</button>
+        <button class="suggestion" data-text="Pick the bottle and put it in the bin">Pick the bottle and put it in the bin</button>
+        <button class="suggestion" data-text="Pour">Pour</button>
+        <button class="suggestion" data-text="Hand it over to me">Hand it over to me</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="composer">
+    <div class="chips">
+      <button class="chip" data-cmd="state">Robot state</button>
+      <button class="chip" data-cmd="reset">New conversation</button>
+      <button class="chip" data-cmd="reset prefs">Reset my speed preference</button>
+    </div>
+    <form id="form" class="input-row" autocomplete="off">
+      <input id="input" type="text" placeholder="Ask the robot…" aria-label="Request to the robot" autofocus>
+      <button class="btn btn-ghost" id="mic" type="button" title="Hold to talk" aria-label="Hold to talk">🎤</button>
+      <button class="btn btn-primary" id="send" type="submit">Send</button>
+    </form>
+    <p class="phase" id="phase"><span class="dot"></span><span id="phase-text">Ready</span></p>
+  </div>
+</section>
+
+<aside class="log-panel" id="log-panel" aria-label="Camera and logs">
+  <section class="cam" id="cam" aria-label="Live camera">
+    <div class="log-head cam-head">
+      <div class="log-title"><span class="live-dot" id="cam-dot" aria-hidden="true"></span>Camera · YOLO</div>
+      <span class="cam-state" id="cam-state"></span>
+      <button class="icon-btn" id="cam-toggle" aria-controls="cam-view" aria-expanded="true">Hide</button>
+    </div>
+    <div class="cam-view" id="cam-view">
+      <img id="cam-img" alt="Live camera view with the objects YOLO detects">
+      <p class="cam-msg" id="cam-msg" hidden></p>
+    </div>
+  </section>
+  <div class="log-head">
+    <div class="log-title"><span class="live-dot" aria-hidden="true"></span>Logs</div>
+    <div class="log-filters" role="group" aria-label="Filter logs">
+      <button class="filter active" data-filter="all">All</button>
+      <button class="filter" data-filter="planner">Planner</button>
+      <button class="filter" data-filter="robot">Robot</button>
+      <button class="filter" data-filter="errors">Errors</button>
+    </div>
+    <button class="icon-btn" id="log-clear" title="Clear the view (the server keeps the logs)">Clear</button>
+    <button class="icon-btn log-close" id="log-close">Close</button>
+  </div>
+  <div class="log-stream" id="log-stream" data-filter="all"></div>
+  <button class="jump" id="log-jump" hidden>↓ Latest</button>
+</aside>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='format.js') }}"></script>
+<script src="{{ url_for('static', filename='logs.js') }}"></script>
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+<script src="{{ url_for('static', filename='livecam.js') }}"></script>
+{% endblock %}

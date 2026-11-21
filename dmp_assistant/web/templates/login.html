@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Sign in · ROBOT{% endblock %}
+{% block main_class %}center{% endblock %}
+{% block content %}
+<section class="card auth-card">
+  <h1>Sign in</h1>
+  <p class="muted">Look at the camera. Your session opens as soon as your face is recognised.</p>
+
+  <div class="camera" id="camera">
+    <video id="video" autoplay playsinline muted></video>
+    <div class="camera-ring" id="ring"></div>
+  </div>
+
+  <div class="progress" aria-hidden="true">
+    <span></span><span></span><span></span>
+  </div>
+  <p class="auth-status" id="status" role="status" aria-live="polite">Starting the camera…</p>
+
+  <button class="btn btn-primary" id="start" hidden>Try again</button>
+</section>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='camera.js') }}"></script>
+<script src="{{ url_for('static', filename='login.js') }}"></script>
+{% endblock %}

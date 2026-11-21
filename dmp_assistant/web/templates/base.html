@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}ROBOT · assistant{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+</head>
+<body class="{% block body_class %}{% endblock %}">
+  <header class="topbar">
+    <div class="brand">
+      {% if logo %}
+        <img src="{{ url_for('static', filename=logo) }}" alt="ROBOT" class="brand-logo">
+      {% else %}
+        <span class="brand-mark" aria-label="ROBOT">ROBOT</span>
+      {% endif %}
+      <span class="brand-sub">FR5 robot assistant</span>
+    </div>
+    <div class="topbar-right">{% block user %}{% endblock %}</div>
+  </header>
+  <main class="{% block main_class %}{% endblock %}">
+    {% block content %}{% endblock %}
+  </main>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

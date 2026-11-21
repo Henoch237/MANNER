@@ -1,0 +1,26 @@
+# Runtime (versions verified in the `fairino` conda env, Python 3.10)
+dashscope>=1.27
+numpy>=2.2
+PyYAML>=6.0
+py_trees>=2.6
+
+# Web front-end + face authentication
+Flask>=3.1
+Pillow>=12.0
+face-recognition>=1.3     # builds dlib: needs cmake (brew install cmake)
+setuptools<81             # face_recognition_models imports pkg_resources
+
+# Camera pick: RealSense + YOLOv8-OBB (model/best.pt) + OpenCV calibration
+pyrealsense2>=2.55        # macOS: pip install pyrealsense2-macosx if no wheel
+opencv-python>=4.7
+torch>=2.0
+# ultralytics pins numpy<2.0 on macOS + Python 3.10 and would downgrade it.
+# Install it WITHOUT its dependencies (it runs fine on numpy 2.2):
+#   pip install --no-deps ultralytics ultralytics-thop polars psutil cloudpickle
+# ultralytics>=8.3
+
+# Optional: plots in dmp_assistant/tools/record_dmp.py
+matplotlib>=3.10
+
+# NOT on PyPI: the FAIRINO SDK (`from fairino import Robot`) is the compiled
+# package in ../fairino. See README.md, "Setup".

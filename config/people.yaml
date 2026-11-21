@@ -1,0 +1,57 @@
+# people.yaml
+# The roster: who exists, their register, the register definitions, the
+# declared adjustment factors and bounds. Static - edited by humans.
+#
+# Session model (R1-R8):
+#   - current_user owns the session; session state lives in memory and dies
+#     with the process.
+#   - "faster"/"slower" drift the session multiplier (volatile, R3).
+#   - "store that"/"remember" MULTIPLIES the owner's stored preference by the
+#     session drift (R4, accumulate never replace). NEVER for anyone else
+#     (R5 -> hard failure). Deletion only via the explicit "reset prefs".
+version: "1.0"
+
+registers:
+  slower profile:
+    speed: 40
+    accel: 40
+    omega_scale: 0.7
+    confirm_dwell_s: 4.0    # hand_over hold-before-release
+  faster profile:
+    speed: 90
+    accel: 90
+    omega_scale: 1.0
+    confirm_dwell_s: 1.0
+
+# Declared adjustment factors (R3/R7), keyed by the LLM's intent labels
+# (schema_builder.INTENT_ADJUSTMENTS). The planner multiplies the session
+# drift by these; the LLM emits only the label, never the number.
+adjustments:
+  down_strong: 0.1
+  down: 0.5
+  down_slight: 0.85
+  up_slight: 1.25
+  up: 1.8
+  up_strong: 2.0
+
+# Declared bounds (clamping after every multiplication, R8).
+bounds:
+  drift: [0.3, 1.5]        # accumulated session drift
+  speed: [10, 100]         # final MoveL vel/acc percents
+  omega_scale: [0.3, 1.5]  # DMP tempo factor
+  dwell_floor_s: 1.5       # confirm dwell never goes below this
+
+people:
+  john:   { register: "slower profile" }
+  mary:   { register: "slower profile" }
+  alice:  { register: "slower profile" }
+  peter:  { register: "slower profile" }
+  grace:  { register: "slower profile" }
+  samuel: { register: "slower profile" }
+  linda:  { register: "slower profile" }
+  sarah:  { register: "faster profile" }
+  david:  { register: "faster profile" }
+  emily:  { register: "faster profile" }
+
+# The session owner. Switched mid-session via the launcher's "user <name>".
+current_user: "john"
